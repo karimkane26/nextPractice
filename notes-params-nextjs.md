@@ -175,6 +175,106 @@ Résultat : le bouton s'affiche tout de suite, « Chargement... » apparaît bri
 
 ---
 
+## 6. Charger les propriétés depuis MongoDB (page `/properties`)
+
+### Erreur 1 : `Module not found: Can't resolve 'async_hooks'`
+
+`components/PropertyList.tsx` commençait par `"use client"` **et** importait Mongoose (`connectDB`, `Property`).
+
+Mongoose utilise `async_hooks`, un module de **Node.js** qui n'existe pas dans le navigateur. Un fichier `"use client"` est envoyé au navigateur → erreur.
+
+Deux autres problèmes dans le même fichier :
+
+- Un composant client **ne peut pas être `async`** (pas de `await connectDB()` dedans).
+- Faute de frappe : `.learn()` au lieu de **`.lean()`**.
+
+### Solution : séparer serveur et client
+
+- La **page** (Server Component) va chercher les données dans MongoDB.
+- `PropertyList` reste `"use client"` (pour `useState` et les filtres) et reçoit les données en **prop**.
+
+```tsx
+// components/PropertyList.tsx
+"use client"
+import { useState } from 'react'
+import PropertyCard from '@/components/PropertyCard'
+
+const PropertyList = ({ properties }: { properties: any[] }) => {
+  const [search, setSearch] = useState('')
+  // ... filtres comme avant
+}
+```
+
+⚠️ Avant de passer les données au client, il faut les convertir en **objets simples** : `_id` est un `ObjectId` MongoDB, et React refuse de l'envoyer à un composant client (*"Only plain objects can be passed to Client Components"*).
+
+```tsx
+const properties = JSON.parse(JSON.stringify(docs)) // ObjectId -> string, Date -> string
+```
+
+### Erreur 2 : "uncached data during prerendering"
+
+Même erreur qu'en section 5 : avec `cacheComponents`, la requête MongoDB hors d'un `<Suspense>` bloque toute la page.
+→ On met la requête dans un **sous-composant** entouré d'un `<Suspense>`.
+
+### Erreur 3 : "encountered the unstable value `new Date()`"
+
+Next.js ne sait pas qu'une requête Mongoose est dynamique : il l'exécute **pendant le build**. Or Mongoose crée une date (`new Date()`) en interne, une valeur qui change à chaque fois → Next.js refuse.
+
+**Solution : `await connection()`** (de `next/server`) avant la requête. Ça veut dire : « ne prépare pas ce code à l'avance, attends un vrai visiteur ».
+
+### Code final : `app/properties/page.tsx`
+
+```tsx
+import { Suspense } from 'react'
+import { connection } from 'next/server'
+import PropertyList from '@/components/PropertyList'
+import connectDB from '@/app/config/database'
+import Property from '@/app/models/Property'
+
+// Composant serveur qui charge les données depuis MongoDB
+const PropertiesData = async () => {
+  await connection()   // exécuté à chaque requête, pas au build
+  await connectDB()
+  const docs = await Property.find({}).lean()   // ne pas oublier le await !
+  const properties = JSON.parse(JSON.stringify(docs))
+
+  return <PropertyList properties={properties} />
+}
+
+// La page s'affiche tout de suite ; la liste arrive dès que MongoDB répond
+const Properties = () => {
+  return (
+    <section className='px-4 py-6'>
+      <div className="container-xl lg:container m-auto px-4 py-6">
+        <Suspense fallback={<p>Chargement des propriétés...</p>}>
+          <PropertiesData />
+        </Suspense>
+      </div>
+    </section>
+  )
+}
+
+export default Properties
+```
+
+Pièges rencontrés :
+
+- Oublier le `await` devant `Property.find({}).lean()` → on obtient une requête non exécutée, pas la liste.
+- Retirer `JSON.parse(JSON.stringify(...))` → erreur sur les `ObjectId`.
+
+### Erreur de connexion : `querySrv ENOTFOUND _mongodb._tcp.xxx.mongodb.net`
+
+Le nom du cluster dans `MONGODB_URI` (fichier `.env`) **n'existe pas** : adresse mal copiée ou cluster supprimé dans Atlas.
+
+- Recopier la chaîne depuis Atlas : **Connect → Drivers**.
+- Pas d'espace après le `=` dans `.env`.
+- Autoriser son IP dans **Network Access**.
+- Redémarrer `npm run dev` après avoir modifié `.env`.
+
+⚠️ Dans `app/config/database.js`, le `catch` affiche l'erreur mais ne l'arrête pas : la page continue et `Property.find()` attend environ 10 s avant d'échouer. Ajouter `throw error` dans le `catch` pour voir l'erreur tout de suite.
+
+---
+
 ## Règles à retenir
 
 1. Hook = `'use client'` obligatoire, en première ligne, sans espace.
@@ -182,6 +282,9 @@ Résultat : le bouton s'affiche tout de suite, « Chargement... » apparaît bri
 3. `useSearchParams()` → `.get('clé')`.
 4. Avec `cacheComponents`, toute donnée dynamique (params, searchParams, fetch...) va dans un `<Suspense>`.
 5. Composant React = nom avec une **majuscule** (`Page`, pas `page`).
+6. Base de données (Mongoose, modèles, `connectDB`) = **serveur uniquement**, jamais dans un fichier `"use client"`.
+7. Données MongoDB → composant client : convertir avec `JSON.parse(JSON.stringify(...))`.
+8. Requête en base avec `cacheComponents` : `await connection()` avant la requête + `<Suspense>` autour.
 
 ---
 

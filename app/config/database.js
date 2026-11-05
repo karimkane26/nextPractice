@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 let connected = false;
-
 const connectToDB = async () => {
     mongoose.set("strictQuery", true);
     if (connected) {
