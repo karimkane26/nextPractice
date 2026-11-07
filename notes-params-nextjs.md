@@ -199,7 +199,10 @@ Résultat : le bouton s'affiche tout de suite, « Chargement... » apparaît bri
 
 ---
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
+=======
+>>>>>>> 60a6434b460543a6ace597370826b261f9608a12
 ## 6. Charger les propriétés depuis MongoDB (page `/properties`)
 
 ### Erreur 1 : `Module not found: Can't resolve 'async_hooks'`
@@ -310,6 +313,7 @@ Le nom du cluster dans `MONGODB_URI` (fichier `.env`) **n'existe pas** : adresse
 6. Base de données (Mongoose, modèles, `connectDB`) = **serveur uniquement**, jamais dans un fichier `"use client"`.
 7. Données MongoDB → composant client : convertir avec `JSON.parse(JSON.stringify(...))`.
 8. Requête en base avec `cacheComponents` : `await connection()` avant la requête + `<Suspense>` autour.
+<<<<<<< HEAD
 =======
 # Partie B : construire l'interface
 
@@ -333,6 +337,8 @@ Autres pièges :
 - Ne pas mettre un `<button>` à l'intérieur d'un `<Link>` : deux éléments cliquables imbriqués, c'est du HTML invalide.
 - Tailwind v4 a renommé des classes : `flex-shrink-0` → `shrink-0`, `ring-opacity-5` → `ring-black/5`.
 >>>>>>> Stashed changes
+=======
+>>>>>>> 60a6434b460543a6ace597370826b261f9608a12
 
 ---
 
