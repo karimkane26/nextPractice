@@ -1,14 +1,13 @@
 "use client"
 import { useState } from 'react'
-import properties from '@/properties.json'
 import PropertyCard from '@/components/PropertyCard'
 
-const PropertyList = () => {
+// Les données arrivent déjà chargées depuis la page (Server Component)
+const PropertyList = ({ properties }: { properties: any[] }) => {
   // Ce que l'utilisateur tape dans la barre de recherche
   const [search, setSearch] = useState('')
   // Le type choisi dans la liste déroulante ('' = tous les types)
   const [type, setType] = useState('')
-
   // On garde seulement les propriétés qui correspondent aux filtres
   const filteredProperties = properties.filter((property) => {
     // 1. La recherche : on compare en minuscules pour ignorer les majuscules

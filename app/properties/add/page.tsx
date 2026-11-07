@@ -1,5 +1,6 @@
 import React from 'react'
 import property from '@/properties.json'
+
 const AddPropertyPage = () => {
   console.log(property);
   
