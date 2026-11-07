@@ -4,6 +4,7 @@ import Property from '@/app/models/Property'
 import PropertyHeaderImage from '@/components/PropertyHeaderImage'
 import { FaArrowLeft } from 'react-icons/fa'
 import Link from 'next/link'
+import PropertyDetails from '@/components/PropertyDetails'
 const PropertyPage = async(props: PageProps<'/properties/[id]'>) => {
   const {id} = await props.params
   await connectToDB()
@@ -21,8 +22,9 @@ const PropertyPage = async(props: PageProps<'/properties/[id]'>) => {
     </section>
        <section className="bg-blue-50">
       <div className="container m-auto py-10 px-6">
-        <div className="grid grid-cols-1 md:grid-cols-70/30 w-full gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-[70%_28%] w-full gap-6">
         {/* Left column: Property details */ }
+        <PropertyDetails property={property} />
         </div>
         </div>
     </section>
