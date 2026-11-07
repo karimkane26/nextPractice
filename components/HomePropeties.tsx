@@ -2,7 +2,9 @@ import React from 'react'
 import connectToDB from '@/app/config/database'
 import Property from '@/app/models/Property'
 import PropertyCard from './PropertyCard'
+import { connection } from 'next/server'
 const HomePropeties = async () => {
+    await connection()
     await connectToDB()
     const recentProperties = await Property.find({})
     .sort({createdAt: -1})

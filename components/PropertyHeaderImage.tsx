@@ -1,25 +1,23 @@
-import React from 'react'
-import Property from '@/app/models/Property'
-import connectToDB from '@/app/config/database'
-const PropertyHeaderImage = ({props: image}) => {
-   
+import Image from 'next/image'
+
+// On reçoit seulement le nom du fichier, ex : "a1.jpg"
+const PropertyHeaderImage = ({ image }: { image: string }) => {
   return (
-    <>
-   <section>
+    <section>
       <div className="container-xl m-auto">
         <div className="grid grid-cols-1">
-          <img
-            src={`images/properties/${image}`}
+          <Image
+            src={`/images/properties/${image}`}
             alt=""
             className="object-cover h-[400px] w-full"
             width={0}
             height={0}
-            sizes='100vw'
+            sizes="100vw"
+            priority
           />
         </div>
       </div>
     </section>
-    </>
   )
 }
 
