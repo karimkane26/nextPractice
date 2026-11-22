@@ -1,11 +1,11 @@
-import connectToDB from "@/app/config/database";
-import Property from "@/app/models/Property";
+import connectToDB from "@/config/database";
+import Property from "@/models/Property";
 export const GET = async () => {
 //   return new Response("Hello from the properties API route!");
 try{
     await connectToDB();
     const properties = await Property.find({});
-    return new Response(properties, {
+    return new Response(JSON.stringify(properties), {
     status: 200,
 })
 }

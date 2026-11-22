@@ -1,6 +1,6 @@
 import React from 'react'
-import connectToDB from '@/app/config/database'
-import Property from '@/app/models/Property'
+import connectToDB from '@/config/database'
+import Property from '@/models/Property'
 import PropertyCard from './PropertyCard'
 import { connection } from 'next/server'
 const HomePropeties = async () => {

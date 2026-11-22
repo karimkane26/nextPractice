@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
+import AuthProvider from "@/components/AuthProvider";
+import { GlobalProvider } from "@/context/GlobalContext";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -21,12 +22,15 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
+    <AuthProvider>
+      <GlobalProvider>
+      <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {/* Navbar utilise usePathname() : avec cacheComponents, elle doit être dans un Suspense */}
+
         <Suspense fallback={<nav className="h-20 bg-blue-700 border-b border-blue-500" />}>
           <Navbar />
         </Suspense>
@@ -34,5 +38,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Footer />
       </body>
     </html>
+      </GlobalProvider>
+    </AuthProvider>
+    
   );
 }

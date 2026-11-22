@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import { connection } from 'next/server'
 import PropertyList from '@/components/PropertyList'
-import connectDB from '@/app/config/database'
-import Property from '@/app/models/Property'
+import connectDB from '@/config/database'
+import Property from '@/models/Property'
 
 // Composant serveur qui charge les données depuis MongoDB
 const PropertiesData = async () => {

@@ -22,6 +22,19 @@ Notes tirées du projet `nextpractice` : un site d'annonces immobilières constr
 **Partie C : Git**
 12. Push bloqué : « Push cannot contain secrets »
 
+**Partie E : la page détail `/properties/[id]`**
+13. `PropertyDetails` : bien destructurer les données
+14. Ajouter des émoticônes
+15. La route API `GET /api/properties/[id]`
+
+**Partie F : connexion Google avec NextAuth (en cours)**
+16. Déplacer `config/` et `models/` à la racine
+17. Le principe et la préparation (Google Cloud Console, `.env`)
+18. Les 3 fichiers de la connexion
+19. Le parcours complet d'une connexion
+20. Utiliser la session (client et serveur)
+21. Les erreurs rencontrées (et corrigées)
+
 **Partie D : suite du projet**
 
 ---
@@ -199,10 +212,6 @@ Résultat : le bouton s'affiche tout de suite, « Chargement... » apparaît bri
 
 ---
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
->>>>>>> 60a6434b460543a6ace597370826b261f9608a12
 ## 6. Charger les propriétés depuis MongoDB (page `/properties`)
 
 ### Erreur 1 : `Module not found: Can't resolve 'async_hooks'`
@@ -256,8 +265,8 @@ Next.js ne sait pas qu'une requête Mongoose est dynamique : il l'exécute **pen
 import { Suspense } from 'react'
 import { connection } from 'next/server'
 import PropertyList from '@/components/PropertyList'
-import connectDB from '@/app/config/database'
-import Property from '@/app/models/Property'
+import connectDB from '@/config/database'
+import Property from '@/models/Property'
 
 // Composant serveur qui charge les données depuis MongoDB
 const PropertiesData = async () => {
@@ -299,7 +308,31 @@ Le nom du cluster dans `MONGODB_URI` (fichier `.env`) **n'existe pas** : adresse
 - Autoriser son IP dans **Network Access**.
 - Redémarrer `npm run dev` après avoir modifié `.env`.
 
-⚠️ Dans `app/config/database.js`, le `catch` affiche l'erreur mais ne l'arrête pas : la page continue et `Property.find()` attend environ 10 s avant d'échouer. Ajouter `throw error` dans le `catch` pour voir l'erreur tout de suite.
+⚠️ Dans l'ancienne version de `config/database.js`, le `catch` affichait l'erreur mais ne l'arrêtait pas : la page continuait et `Property.find()` attendait environ 10 s avant d'échouer. ✅ Corrigé : on a ajouté `throw error` dans le `catch`, et on vérifie la connexion avec `mongoose.connection.readyState` :
+
+```js
+// config/database.js
+import mongoose from "mongoose";
+
+const connectToDB = async () => {
+  // Déjà connecté ? On ne refait rien
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log("MongoDB connecté");
+  } catch (error) {
+    console.error("Erreur de connexion MongoDB :", error.message);
+    throw error; // on arrête tout au lieu de continuer sans connexion
+  }
+};
+
+export default connectToDB;
+```
+
+`readyState === 1` veut dire « connecté ». C'est plus fiable qu'une variable `connected = false` qu'on gère à la main.
 
 ---
 
@@ -313,8 +346,9 @@ Le nom du cluster dans `MONGODB_URI` (fichier `.env`) **n'existe pas** : adresse
 6. Base de données (Mongoose, modèles, `connectDB`) = **serveur uniquement**, jamais dans un fichier `"use client"`.
 7. Données MongoDB → composant client : convertir avec `JSON.parse(JSON.stringify(...))`.
 8. Requête en base avec `cacheComponents` : `await connection()` avant la requête + `<Suspense>` autour.
-<<<<<<< HEAD
-=======
+
+---
+
 # Partie B : construire l'interface
 
 ## 6. Convertir un template HTML en JSX
@@ -336,9 +370,6 @@ Autres pièges :
 - Un `id` doit être **unique** dans la page (le template avait deux `user-menu-item-2`).
 - Ne pas mettre un `<button>` à l'intérieur d'un `<Link>` : deux éléments cliquables imbriqués, c'est du HTML invalide.
 - Tailwind v4 a renommé des classes : `flex-shrink-0` → `shrink-0`, `ring-opacity-5` → `ring-black/5`.
->>>>>>> Stashed changes
-=======
->>>>>>> 60a6434b460543a6ace597370826b261f9608a12
 
 ---
 
@@ -639,6 +670,208 @@ Une vraie clé se met dans `.env.local` (jamais commité) et se lit avec `proces
 
 ---
 
+# Partie E : la page détail `/properties/[id]`
+
+La page `app/properties/[id]/page.tsx` cherche la propriété dans MongoDB, puis l'envoie au composant `components/PropertyDetails.tsx` :
+
+```tsx
+const { id } = await props.params
+await connectToDB()
+const property = await Property.findById(id).lean()
+
+<PropertyDetails property={property} />
+```
+
+## 13. `PropertyDetails` : bien destructurer les données
+
+### Le problème : rien ne s'affiche
+
+Le composant utilisait des noms de champs **inventés** (copiés du template) :
+
+```tsx
+{property.address}       // ❌ n'existe pas dans le modèle
+{property.bedrooms}      // ❌
+{property.bathrooms}     // ❌
+{property.squareFootage} // ❌
+{property.nightlyRate}   // ❌
+```
+
+Un champ qui n'existe pas vaut `undefined`, et React n'affiche rien pour `undefined`. **Pas d'erreur, juste du vide** : c'est pour ça que c'est difficile à repérer.
+
+### La règle : les noms viennent du modèle
+
+On ouvre `models/Property.js` et on recopie **exactement** les noms :
+
+| Écrit dans le composant | Nom réel dans le modèle |
+|---|---|
+| `property.address` | `location.street`, `location.city`, `location.state`, `location.zipcode` |
+| `property.bedrooms` | `beds` |
+| `property.bathrooms` | `baths` |
+| `property.squareFootage` | `square_feet` |
+| `property.nightlyRate` | `rates.nightly` |
+| `property.weeklyRate` | `rates.weekly` |
+| `property.monthlyRate` | `rates.monthly` |
+
+⚠️ `location` et `rates` sont des **objets dans l'objet** : on écrit `rates.weekly`, pas `weeklyRate`.
+
+### La destructuration
+
+Au lieu d'écrire `property.` partout, on « sort » les champs une seule fois, en haut du composant :
+
+```tsx
+const PropertyDetails = ({ property }: { property: any }) => {
+  // On extrait les champs avec les noms exacts du modèle Property
+  const {
+    type,
+    name,
+    description,
+    location,
+    beds,
+    baths,
+    square_feet,
+    amenities = [],   // valeur par défaut si le champ n'existe pas
+    rates = {},
+  } = property
+
+  return (
+    <h1>{name}</h1>   // au lieu de {property.name}
+  )
+}
+```
+
+- `const { name } = property` est la même chose que `const name = property.name`.
+- `amenities = []` : si la propriété n'a pas d'équipements, on a une liste vide au lieu de `undefined`. Sans ça, `amenities.includes(...)` ferait planter la page.
+- `rates = {}` : idem, `rates.weekly` donne `undefined` au lieu de planter.
+
+### Afficher l'adresse
+
+```tsx
+<p>{location?.street}, {location?.city}, {location?.state} {location?.zipcode}</p>
+```
+
+`?.` (chaînage optionnel) : si `location` n'existe pas, on obtient `undefined` au lieu d'une erreur.
+
+### Afficher un tarif, ou une croix s'il n'existe pas
+
+```tsx
+{rates.weekly ? `$${rates.weekly}` : <i className="fa fa-xmark text-red-700"></i>}
+```
+
+- `` `$${rates.weekly}` `` : le premier `$` est le symbole dollar, `${...}` insère la valeur.
+
+Piège rencontré : dans le bloc « Nightly », le template affichait la **valeur** à la place du **libellé**. Les trois blocs doivent avoir la même forme : libellé à gauche, prix à droite.
+
+### Reste à corriger : les équipements
+
+La liste écrit encore les ✓ et certains textes en dur (« Hot Tub », « Parking »...), même si la propriété n'a pas l'équipement. La bonne façon, c'est de boucler sur le tableau :
+
+```tsx
+<ul>
+  {amenities.map((amenity: string) => (
+    <li key={amenity}>✓ {amenity}</li>
+  ))}
+</ul>
+```
+
+---
+
+## 14. Ajouter des émoticônes
+
+Un émoji est un **simple caractère** : on le colle directement dans le JSX, sans import ni bibliothèque.
+
+```tsx
+<span className="text-lg mr-2">📍</span>   // adresse
+
+<h3>💰 Rates & Options</h3>
+
+<div>🌙 Nightly</div>
+<div>📅 Weekly</div>
+<div>🗓️ Monthly</div>
+```
+
+- On peut lui donner une taille avec Tailwind (`text-lg`), comme du texte.
+- L'icône Font Awesome `fa-location-dot` a été retirée : avec l'émoji 📍 il y aurait eu deux épingles.
+
+---
+
+## 15. La route API `GET /api/properties/[id]`
+
+Fichier : `app/api/properties/[id]/route.js`. Elle renvoie **une** propriété en JSON.
+
+### Le code avec les deux erreurs
+
+```js
+export const GET = async (req, { params }) => {
+    const { id } = params;                       // ❌ erreur 1
+    try {
+        await connectToDB();
+        const property = await Property.findById(id);
+        if (!property) {
+            return new Response(JSON.stringify({ message: "Property not found" }), { status: 404 });
+        }
+        return new Response(property, { status: 200 });   // ❌ erreur 2
+    } catch (error) {
+        console.error("Error fetching properties:", error);
+        return new Response(JSON.stringify({ message: "Error fetching properties" }), { status: 500 });
+    }
+}
+```
+
+### Erreur 1 : `params` n'est pas attendu
+
+Même règle que dans les pages (section 2) : **depuis Next.js 15, `params` est une Promise**, aussi dans les routes API.
+Sans `await`, `id` vaut `undefined` et `findById` ne trouve rien.
+
+```js
+const { id } = await params;   // ✅
+```
+
+### Erreur 2 : l'objet est envoyé tel quel
+
+`new Response()` attend du **texte**. Si on lui donne un objet, JavaScript le transforme en chaîne et le client reçoit :
+
+```
+[object Object]
+```
+
+Il faut le convertir en JSON :
+
+```js
+return new Response(JSON.stringify(property), { status: 200 });   // ✅
+// ou, plus court :
+return Response.json(property, { status: 200 });
+```
+
+### Le code corrigé
+
+```js
+import connectToDB from "@/config/database";
+import Property from "@/models/Property";
+
+export const GET = async (req, { params }) => {
+    const { id } = await params;   // params est une Promise
+    try {
+        await connectToDB();
+        const property = await Property.findById(id);
+
+        // Aucune propriété avec cet id → 404
+        if (!property) {
+            return Response.json({ message: "Property not found" }, { status: 404 });
+        }
+
+        // On renvoie la propriété en JSON
+        return Response.json(property, { status: 200 });
+    } catch (error) {
+        console.error("Error fetching property:", error);
+        return Response.json({ message: "Error fetching property" }, { status: 500 });
+    }
+}
+```
+
+Détail : le message d'erreur parlait de « properties » (pluriel) alors qu'on cherche **une** propriété.
+
+---
+
 ## Règles à retenir
 
 1. Hook (`useState`, `usePathname`...) = `'use client'` obligatoire, en première ligne, sans espace.
@@ -651,6 +884,309 @@ Une vraie clé se met dans `.env.local` (jamais commité) et se lit avec `proces
 8. Un composant de carte affiche **une** carte ; le `.map()` (avec `key`) est dans la page.
 9. `condition && (...)` pour afficher ou non, `condition ? A : B` pour choisir entre deux.
 10. Jamais de clé d'API dans un fichier commité.
+11. Les noms des champs viennent du **modèle** : un nom inventé donne `undefined`, donc une page vide sans erreur.
+12. Destructuration avec valeur par défaut (`amenities = []`) pour éviter de planter si le champ manque.
+13. Route API : `await params`, et `JSON.stringify()` (ou `Response.json()`) pour renvoyer un objet.
+
+---
+
+# Partie F : connexion Google avec NextAuth (en cours)
+
+## 16. Déplacer `config/` et `models/` à la racine
+
+Avant, la base de données et les modèles étaient **dans** `app/` :
+
+```
+app/config/database.js   →   config/database.js
+app/models/Property.js   →   models/Property.js
+app/models/User.js       →   models/User.js
+```
+
+Pourquoi ? Le dossier `app/` sert aux **routes** (pages, API). Le code « outil » (connexion, modèles, config d'auth) se range à côté, à la racine, comme `components/` et `utils/`.
+
+Il faut donc changer les imports :
+
+```js
+import connectDB from '@/config/database'   // avant : '@/app/config/database'
+import Property from '@/models/Property'    // avant : '@/app/models/Property'
+```
+
+`@/` = la racine du projet (défini dans `tsconfig.json`).
+
+⚠️ **Tous les fichiers qui importent l'ancien chemin vont planter** (*Module not found*). ✅ Tous corrigés : les pages `/`, `/properties`, `/properties/[id]`, `components/HomePropeties.tsx` et les deux routes API.
+
+Astuce : rechercher `@/app/config` et `@/app/models` dans VS Code (`Ctrl + Shift + F`) pour n'en oublier aucun.
+
+---
+
+## 17. Le principe et la préparation
+
+### Le principe
+
+Ton site ne voit **jamais** le mot de passe Google. Il délègue la connexion à Google, et Google lui répond : « c'est bien Jean, voici son email et sa photo ». **NextAuth** s'occupe de tout cet échange à ta place.
+
+```bash
+npm install next-auth
+```
+
+### Dans Google Cloud Console (console.cloud.google.com)
+
+1. Créer un projet.
+2. *APIs & Services → Credentials → Create Credentials → OAuth client ID*, type **Web application**.
+3. Dans *Authorized redirect URIs*, ajouter :
+
+   ```
+   http://localhost:3000/api/auth/callback/google
+   ```
+
+   C'est l'adresse où Google renvoie l'utilisateur après la connexion. Si elle manque → erreur **`redirect_uri_mismatch`**.
+4. Google donne un **Client ID** et un **Client Secret**.
+
+### Dans `.env` (jamais commité, voir Partie C)
+
+```
+GOOGLE_CLIENT_ID=...         # donné par Google
+GOOGLE_CLIENT_SECRET=...     # donné par Google, à garder secret
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL_INTERNAL=http://localhost:3000
+NEXTAUTH_SECRET=...          # une longue chaîne au hasard
+```
+
+`NEXTAUTH_SECRET` sert à **signer le cookie de session** : personne ne peut le falsifier.
+
+---
+
+## 18. Les 3 fichiers de la connexion
+
+| Fichier | Rôle |
+|---|---|
+| `utils/authOption.js` | **la config** : on utilise Google, et voici quoi faire à la connexion |
+| `app/api/auth/[...nextauth]/route.js` | **la porte d'entrée** : les URLs que NextAuth utilise |
+| `components/AuthProvider.tsx` | **le partage** : rend la session disponible dans tous les composants client |
+
+### 1. `utils/authOption.js` : la config
+
+```js
+import GoogleProvider from 'next-auth/providers/google'
+import connectDB from '@/config/database'
+import User from '@/models/User'
+
+export const authOptions = {
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: 'consent',        // Google affiche toujours la page « Autoriser… »
+          access_type: 'offline',
+          response_type: 'code'
+        }
+      }
+    })
+  ],
+  callbacks: { /* voir ci-dessous */ }
+}
+```
+
+- `providers` = la liste des façons de se connecter (ici, seulement Google).
+- Les **callbacks** sont des fonctions que NextAuth appelle **tout seul** à des moments précis.
+
+#### Le callback `signIn` : appelé **une fois**, juste après le « OK » de Google
+
+```js
+async signIn({ profile }) {        // profile = les infos envoyées par Google
+  // 1. Connexion à MongoDB
+  await connectDB()
+  // 2. L'utilisateur existe-t-il déjà ?
+  const userExists = await User.findOne({ email: profile.email })
+  // 3. Première connexion → on l'enregistre
+  if (!userExists) {
+    await User.create({
+      email: profile.email,
+      username: profile.name.slice(0, 20),   // nom coupé à 20 caractères
+      image: profile.picture,                // photo Google
+    })
+  }
+  // 4. true = on laisse entrer (false refuserait la connexion)
+  return true
+}
+```
+
+C'est ici que l'utilisateur Google devient un utilisateur **de notre base MongoDB** : créé la première fois, simplement retrouvé les fois suivantes.
+
+#### Le callback `session` : appelé **à chaque fois** qu'on demande « qui est connecté ? »
+
+```js
+async session({ session }) {
+  await connectDB()
+  // 1. Chercher l'utilisateur dans la base
+  const user = await User.findOne({ email: session.user.email })
+  // 2. Ajouter son id MongoDB à la session
+  session.user.id = user._id.toString()
+  // 3. Toujours renvoyer la session !
+  return session
+}
+```
+
+Au départ, la session ne contient que `name`, `email` et `image` (venant de Google). On ajoute **l'id MongoDB**, car c'est lui qui relie l'utilisateur à ses annonces (`owner`) et à ses messages (`recipient`).
+
+### 2. `app/api/auth/[...nextauth]/route.js` : la porte d'entrée
+
+```js
+import NextAuth from 'next-auth'
+import { authOptions } from '@/utils/authOption'
+
+const handler = NextAuth(authOptions)
+
+// NextAuth reçoit des GET (page de connexion) et des POST (se connecter)
+export { handler as GET, handler as POST }
+```
+
+`[...nextauth]` (avec les 3 points) = une route qui attrape **tous** les chemins après `/api/auth/` :
+
+| URL | Rôle |
+|---|---|
+| `/api/auth/signin` | démarrer la connexion |
+| `/api/auth/callback/google` | retour depuis Google |
+| `/api/auth/signout` | déconnexion |
+| `/api/auth/session` | qui est connecté ? |
+
+### 3. `components/AuthProvider.tsx` : le partage
+
+```tsx
+'use client'
+import { SessionProvider } from 'next-auth/react'
+
+// Rend la session (useSession) disponible dans tous les composants client
+const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  return <SessionProvider>{children}</SessionProvider>
+}
+export default AuthProvider
+```
+
+`SessionProvider` utilise le contexte React → `'use client'` obligatoire. On le met dans `app/layout.tsx`, autour de tout le reste :
+
+```tsx
+<AuthProvider>
+  <GlobalProvider>
+    <html lang="en">
+      <body>...</body>
+    </html>
+  </GlobalProvider>
+</AuthProvider>
+```
+
+C'est le même principe que la Context API : un « fournisseur » en haut, et n'importe quel composant en dessous peut lire la session avec `useSession()`.
+(`GlobalProvider`, dans `context/GlobalContext.jsx`, partage le nombre de messages non lus : même idée, avec `createContext` + `useState`.)
+
+---
+
+## 19. Le parcours complet d'une connexion
+
+```
+1. Clic sur « Login or Register »   →  signIn('google')
+2. NextAuth redirige vers la page de connexion Google
+3. L'utilisateur choisit son compte et accepte
+4. Google renvoie vers /api/auth/callback/google
+5. NextAuth appelle signIn()        →  utilisateur créé ou retrouvé dans MongoDB
+6. NextAuth crée un cookie de session (signé avec NEXTAUTH_SECRET)
+7. Retour sur le site : useSession() renvoie l'utilisateur connecté
+```
+
+---
+
+## 20. Utiliser la session dans le code
+
+### Côté client (ex : la Navbar)
+
+```tsx
+'use client'
+import { signIn, signOut, useSession, getProviders } from 'next-auth/react'
+
+const { data: session } = useSession()
+const profileImage = session?.user?.image
+
+{!session && <button onClick={() => signIn('google')}>Login or Register</button>}
+{session && <Image src={profileImage || profileDefault} width={40} height={40} alt="" />}
+{session && <button onClick={() => signOut({ callbackUrl: '/' })}>Sign Out</button>}
+```
+
+- `useSession()` → `session` vaut `null` si personne n'est connecté.
+- La Navbar utilise `getProviders()` (dans un `useEffect`) pour afficher un bouton par fournisseur : ici, un seul (Google).
+- La photo Google vient d'un autre site → il faut l'autoriser dans `next.config.ts`, sinon `<Image>` la refuse :
+
+```ts
+images: {
+  remotePatterns: [
+    { protocol: "https", hostname: "lh3.googleusercontent.com" },
+  ],
+},
+```
+
+### Côté serveur (ex : pages `/profile` et `/messages`)
+
+```js
+// utils/getSessionUser.js
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/utils/authOption'
+
+export const getSessionUser = async () => {
+  const session = await getServerSession(authOptions)   // lit le cookie de session
+  if (!session || !session.user) return null            // personne n'est connecté
+  return { user: session.user, userId: session.user.id }
+}
+```
+
+```js
+// dans une page serveur
+const sessionUser = await getSessionUser()
+if (!sessionUser) {
+  return <p>Connecte-toi pour voir ton profil.</p>
+}
+const properties = await Property.find({ owner: sessionUser.userId })
+```
+
+⚠️ La session dépend du **visiteur** : avec `cacheComponents`, la page doit être dans un `<Suspense>` (même règle qu'en section 5) :
+
+```jsx
+const ProfileContent = async () => { /* getSessionUser + MongoDB */ }
+
+const ProfilePage = () => (
+  <Suspense fallback={<p>Chargement du profil...</p>}>
+    <ProfileContent />
+  </Suspense>
+)
+```
+
+---
+
+## 21. Les erreurs rencontrées (et corrigées)
+
+| Erreur | Correction |
+|---|---|
+| Route dans `app/api/properties/auth/[...nextauth]/` | La déplacer dans `app/api/auth/[...nextauth]/` : NextAuth cherche `/api/auth/...` |
+| Route copiée de la doc avec `GithubProvider` | Réutiliser `authOptions` de `utils/authOption.js` (Google) |
+| `export default NextAuth(...)` | App Router : `export { handler as GET, handler as POST }` |
+| `import Google ...` mais utilisé `GoogleProvider(...)` | Le nom importé doit être **le même** que le nom utilisé |
+| `import { access } from "node:fs"` | Import ajouté par erreur (auto-import de VS Code) → supprimé |
+| `import User from '@'`, `connectDB` jamais importé | `import User from '@/models/User'`, `import connectDB from '@/config/database'` |
+| Callback `session` vide | Renvoie `undefined` → plus de session. Il faut **toujours** `return session` |
+| Photo Google refusée par `<Image>` | Ajouter `lh3.googleusercontent.com` dans `next.config.ts` |
+| `/profile` plante si personne n'est connecté | Tester `if (!sessionUser)` avant de lire `userId` |
+| `children` implicitement `any` dans `AuthProvider.tsx` | Typer : `{ children: React.ReactNode }` |
+| `redirect_uri_mismatch` (côté Google) | Ajouter `http://localhost:3000/api/auth/callback/google` dans Google Cloud Console |
+
+### Règles à retenir (Partie F)
+
+1. `app/` = les routes. `config/`, `models/`, `utils/`, `components/`, `context/` = à la racine.
+2. Après un déplacement de fichier, chercher **tous** les anciens imports.
+3. Le site ne voit jamais le mot de passe : Google confirme l'identité, NextAuth gère l'échange.
+4. Route NextAuth : `app/api/auth/[...nextauth]/route.js`, avec `export { handler as GET, handler as POST }`.
+5. `signIn` = une fois, à la connexion (créer l'utilisateur en base). `session` = à chaque lecture (ajouter l'id MongoDB).
+6. Un callback NextAuth renvoie **toujours** une valeur (`return true`, `return session`).
+7. Client : `useSession()`, `signIn()`, `signOut()`. Serveur : `getServerSession(authOptions)`.
+8. Session côté serveur + `cacheComponents` → `<Suspense>` obligatoire.
 
 ---
 
@@ -660,20 +1196,28 @@ Une vraie clé se met dans `.env.local` (jamais commité) et se lit avec `proces
 
 - Navbar : hamburger, menu profil, lien actif, connexion simulée (`isLoggedIn`)
 - Footer
-- `PropertyCard` : une carte branchée sur `properties.json`
-- Page `/properties` : liste + filtre (recherche nom/ville, type, compteur, réinitialiser)
+- `PropertyCard` : une carte, données venant de MongoDB
+- Page `/properties` : liste depuis MongoDB + filtre (recherche nom/ville, type, compteur, réinitialiser)
+- Page détail `/properties/[id]` : image, adresse, tarifs, infos (voir Partie E)
+- Routes API `GET /api/properties` et `GET /api/properties/[id]`
+- `config/` et `models/` déplacés à la racine (voir Partie F)
 
 ## À faire ensuite (par ordre de priorité)
 
-### 1. Page détail `/properties/[id]` ⭐ la plus importante
+### 1. Finir la connexion Google ⭐ (en cours, voir Partie F)
 
-Le bouton « Details » de chaque carte y mène, mais elle n'affiche que l'id.
+- ✅ Anciens imports corrigés (section 16), route NextAuth et `utils/authOption.js` corrigés (section 18)
+- ✅ Navbar : `signIn()` / `signOut()` / `useSession()` à la place de la connexion simulée
+- ✅ Pages `/profile` et `/messages` (dans un `<Suspense>`, car la session dépend du visiteur)
+- Dans Google Cloud Console, ajouter l'URL de retour : `http://localhost:3000/api/auth/callback/google`
+- Compteur de messages non lus : `context/GlobalContext.jsx` existe, mais `unreadCount` reste à 0 tant qu'on ne compte pas les messages en base
 
-- Chercher la propriété dans le JSON : `properties.find((p) => p._id === id)`
-- Afficher : image principale, description, tarifs, équipements (`amenities`), contact vendeur (`seller_info`)
+### 2. Finir la page détail
+
+- Équipements : boucler sur `amenities` au lieu du texte en dur (section 13)
 - Gérer le cas où l'id n'existe pas (afficher « Propriété introuvable »)
 
-### 2. Page d'accueil `/`
+### 3. Page d'accueil `/`
 
 Presque vide. ⚠️ Il reste un `*/` en trop ligne 9 de `app/page.tsx`, qui s'affiche comme du texte.
 
@@ -681,16 +1225,16 @@ Presque vide. ⚠️ Il reste un `*/` en trop ligne 9 de `app/page.tsx`, qui s'a
 - Deux encarts « Je cherche / Je loue »
 - 3 propriétés récentes, en réutilisant `PropertyCard` (le composant `HomePropeties.tsx` existe déjà)
 
-### 3. Page 404 personnalisée (`app/not-found.tsx`)
+### 4. Page 404 personnalisée (`app/not-found.tsx`)
 
 Rapide à faire, et couvre les liens de la Navbar qui mènent encore à une 404 (`/messages`, `/profile`, `/properties/saved`, `/terms`).
 
-### 4. Formulaire `/properties/add`
+### 5. Formulaire `/properties/add`
 
 Gros formulaire : type, adresse, chambres, tarifs, équipements, images.
 Bon exercice sur les **formulaires contrôlés** avec `useState`, mais il ne servira vraiment qu'avec le backend.
 
-## À attendre (dépend du backend / de la connexion Google)
+## À attendre (dépend de la connexion Google)
 
 - **Profile**, **Saved Properties**, **Messages** : ces pages ont besoin d'un utilisateur connecté et d'une base de données. Les faire maintenant avec de fausses données = travail à refaire.
 

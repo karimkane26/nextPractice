@@ -1,12 +1,13 @@
-import React from 'react'
-import connectToDB from '@/app/config/database'
-import Property from '@/app/models/Property'
+import React, { Suspense } from 'react'
+import connectToDB from '@/config/database'
+import Property from '@/models/Property'
 import PropertyHeaderImage from '@/components/PropertyHeaderImage'
 import { FaArrowLeft } from 'react-icons/fa'
 import Link from 'next/link'
 import PropertyDetails from '@/components/PropertyDetails'
-const PropertyPage = async(props: PageProps<'/properties/[id]'>) => {
-  const {id} = await props.params
+// Composant serveur : lit l'id et cherche la propriété dans MongoDB
+const PropertyContent = async({ params }: { params: PageProps<'/properties/[id]'>['params'] }) => {
+  const {id} = await params
   await connectToDB()
   const property = await Property.findById(id).lean()
   if(!property) {
@@ -30,6 +31,15 @@ const PropertyPage = async(props: PageProps<'/properties/[id]'>) => {
     </section>
 
     </>
+  )
+}
+
+// L'id dépend de l'URL : avec cacheComponents, il va dans un Suspense
+const PropertyPage = (props: PageProps<'/properties/[id]'>) => {
+  return (
+    <Suspense fallback={<p className='text-center py-24'>Chargement de la propriété...</p>}>
+      <PropertyContent params={props.params} />
+    </Suspense>
   )
 }
 

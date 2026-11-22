@@ -1,5 +1,5 @@
-import connectToDB from "@/app/config/database";
-import Property from "@/app/models/Property";
+import connectToDB from "@/config/database";
+import Property from "@/models/Property";
 export const GET = async (req, { params }) => {
     const { id } = await params;
 //   return new Response("Hello from the properties API route!");
