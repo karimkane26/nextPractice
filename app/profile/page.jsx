@@ -1,24 +1,21 @@
-import { Suspense } from 'react';
 import Image from 'next/image';
 import connectDB from '@/config/database';
 import Property from '@/models/Property';
 import { getSessionUser } from '@/utils/getSessionUser';
-import profileDefault from '@/app/assets/images/profile.png';
+import profileDefault from '@/assets/images/profile.png';
 import ProfileProperties from '@/components/ProfileProperties';
 import { convertToSerializeableObject } from '@/utils/convertToObject';
 
-// Composant serveur : lit la session et les annonces de l'utilisateur
-const ProfileContent = async () => {
+const ProfilePage = async () => {
   await connectDB();
 
   const sessionUser = await getSessionUser();
 
-  // Personne n'est connecté
-  if (!sessionUser || !sessionUser.userId) {
-    return <p className='text-center py-24'>Connecte-toi pour voir ton profil.</p>;
-  }
-
   const { userId } = sessionUser;
+
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
 
   const propertiesDocs = await Property.find({ owner: userId }).lean();
   const properties = propertiesDocs.map(convertToSerializeableObject);
@@ -62,15 +59,6 @@ const ProfileContent = async () => {
         </div>
       </div>
     </section>
-  );
-};
-
-// La session dépend du visiteur : avec cacheComponents, elle va dans un Suspense
-const ProfilePage = () => {
-  return (
-    <Suspense fallback={<p className='text-center py-24'>Chargement du profil...</p>}>
-      <ProfileContent />
-    </Suspense>
   );
 };
 

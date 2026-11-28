@@ -1,6 +1,5 @@
 import React from 'react'
 import { FaBed, FaBath, FaRulerCombined, FaCheck, FaTimes } from 'react-icons/fa'
-
 const PropertyDetails = ({ property }: { property: any }) => {
   // On extrait les champs avec les noms exacts du modèle Property
   const {

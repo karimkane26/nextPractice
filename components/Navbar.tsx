@@ -12,7 +12,7 @@ import UnreadMessageCount from '@/components/UnreadMessageCount';
 
 const Navbar = () => {
   const { data: session } = useSession();
-  console.log(session)
+  // console.log(session)
   const profileImage = session?.user?.image;
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

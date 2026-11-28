@@ -4,8 +4,7 @@ import Property from '@/models/Property'
 import PropertyHeaderImage from '@/components/PropertyHeaderImage'
 import { FaArrowLeft } from 'react-icons/fa'
 import Link from 'next/link'
-import PropertyDetails from '@/components/PropertyDetails'
-// Composant serveur : lit l'id et cherche la propriété dans MongoDB
+import PropertyDetails from '@/components/PropertyDetails'// Composant serveur : lit l'id et cherche la propriété dans MongoDB
 const PropertyContent = async({ params }: { params: PageProps<'/properties/[id]'>['params'] }) => {
   const {id} = await params
   await connectToDB()

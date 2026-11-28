@@ -1,17 +1,44 @@
+'use client';
+import { useState } from 'react';
 import Image from 'next/image';
+import { getImageUrl } from '@/utils/getImageUrl';
 import Link from 'next/link';
+import { toast } from 'react-toastify';
+import deleteProperty from '@/app/actions/deleteProperty';
 
-// Liste des annonces de l'utilisateur connecté
-const ProfileProperties = ({ properties }) => {
+const ProfileProperties = ({ properties: initialProperties }) => {
+  const [properties, setProperties] = useState(initialProperties);
+
+  const handleDeleteProperty = async (propertyId) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to delete this property?'
+    );
+
+    if (!confirmed) return;
+
+    const deletePropertyById = deleteProperty.bind(null, propertyId);
+
+    await deletePropertyById();
+
+    toast.success('Property Deleted');
+
+    const updatedProperties = properties.filter(
+      (property) => property._id !== propertyId
+    );
+
+    setProperties(updatedProperties);
+  };
+
   return properties.map((property) => (
     <div key={property._id} className='mb-10'>
       <Link href={`/properties/${property._id}`}>
         <Image
           className='h-32 w-full rounded-md object-cover'
-          src={`/images/properties/${property.images[0]}`}
-          alt={property.name}
-          width={1000}
-          height={200}
+          src={getImageUrl(property.images[0])}
+          alt=''
+          width={500}
+          height={100}
+          priority={true}
         />
       </Link>
       <div className='mt-2'>
@@ -28,8 +55,16 @@ const ProfileProperties = ({ properties }) => {
         >
           Edit
         </Link>
+        <button
+          onClick={() => handleDeleteProperty(property._id)}
+          className='bg-red-500 text-white px-3 py-2 rounded-md hover:bg-red-600'
+          type='button'
+        >
+          Delete
+        </button>
       </div>
     </div>
   ));
 };
+
 export default ProfileProperties;
